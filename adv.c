@@ -119,7 +119,7 @@ int main() {
      printToFile(roomsContainer, DIRECTORY_NAME);
      
      // Output room names to screen (for debugging)
-      printRooms(roomsContainer);
+     //printRooms(roomsContainer);
      
      //deallocate maze generation structures from memory
      deconstructRooms(roomsContainer);
@@ -197,6 +197,9 @@ int main() {
      } else {
           printf("AFTER WANDERING THE MAZE FOR AGES, YOU DIE OF STARVATION.\r\n");
      }
+     
+     deconstructRooms(roomsContainer);
+     roomsContainer = NULL;
      
      return 0;
 }
@@ -362,9 +365,9 @@ struct RoomsContainer * initRoomNodes(const int NUMBER_OF_ROOMS) {
           }
      }
      
-     //set starting location of start and end rooms
+     //set starting location of start and a random end rooms
      roomsContainer->rooms[0]->roomType = START_ROOM;
-     roomsContainer->rooms[1]->roomType = END_ROOM;
+     roomsContainer->rooms[rand()%(roomsContainer->numberOfRooms - 1) + 1]->roomType = END_ROOM;
      
      return roomsContainer;
 }
