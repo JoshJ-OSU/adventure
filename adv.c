@@ -12,14 +12,15 @@
 /*******************
 *    INCLUDED LIBRARIES
 ********************/
-#include "assert.h"                       // assert() to test preconditions
-#include "stdlib.h"                       // exit(), srand, rand()
-#include "string.h"                       // strncpy() function
-#include "stdio.h"                        // printf()
-#include "time.h"                         // time() for seeding random num gen
-#include "sys/types.h"                    //
-#include "sys/stat.h"
-#include "unistd.h"                       // access to POSIX system API
+#include <assert.h>                       // assert() to test preconditions
+#include <stdlib.h>                       // exit(), srand, rand()
+#include <string.h>                       // strncpy() function
+#include <stdio.h>                        // printf()
+#include <time.h>                         // time() for seeding random num gen
+#include <sys/types.h>                    //
+#include <sys/stat.h>
+#include <unistd.h>                       // access to POSIX system API
+#include <dirent.h>
 
 
 /*************************
@@ -31,6 +32,9 @@
 * in function getRoomName().  When changing, modify function accordingly.
 */
 #define NAMES_DEFINED 10
+
+/* STRING_LENGTH_MAX is the number of characters used to store a room name. */
+#define STRING_LENGTH_MAX 31
 
 enum RoomType { START_ROOM, END_ROOM, MID_ROOM };
 
@@ -61,6 +65,13 @@ void linkNodes(struct RoomsContainer *, int, int);
 void buildRandomConnections(struct RoomsContainer *);
 void printFile(struct RoomsContainer *, int, char *);
 void printToFile(struct RoomsContainer *, char *);
+int countFilesInDirectory(char *);
+void loadFiles(struct RoomsContainer *, char *);
+int fReadLine(FILE *, char *, const int);
+int getRoomIndex(struct RoomsContainer *, char *);
+struct RoomNode * getStartNode(struct RoomsContainer *);
+void printConnections(struct RoomsContainer *, struct RoomNode *);
+struct RoomNode * getNextRoom(struct RoomsContainer *, struct RoomNode * cur);
 
 /**************************
 *    MAIN
@@ -108,7 +119,7 @@ int main() {
      printToFile(roomsContainer, DIRECTORY_NAME);
      
      // Output room names to screen (for debugging)
-     printRooms(roomsContainer);
+      printRooms(roomsContainer);
      
      //deallocate maze generation structures from memory
      deconstructRooms(roomsContainer);
@@ -122,16 +133,70 @@ int main() {
      * At this point, the maze has been deallocated and no longer exists in memory
      * The only place the maze exists is within the files found in the directory
      * defined at the top of the main function
-     */
+     */     
      
-     // Load all of the nodes in directory and return a pointer to the array
-     //LoadNodes()
+     // Initialize roomsContainer with the number of rooms available
+     roomsContainer = initRoomNodes(countFilesInDirectory(DIRECTORY_NAME));
      
-     // Game Loop until end node is found
-     // 
+     //loads files to roomsContainer struct
+     loadFiles(roomsContainer, DIRECTORY_NAME);
      
      
+     /**************/
+     /* PLAY MAZE  */
+     /**************/
      
+     const int MAXIMUM_MOVES = 100;
+     struct RoomNode * currentLocation;
+     struct RoomNode * userSelection;
+     char * history[MAXIMUM_MOVES];
+     int playerMoves = 0;
+     int validInput = 0;
+     int i;
+     
+     // Find the start node, and set the currentLocation to it.
+     currentLocation = getStartNode(roomsContainer);
+     
+     //repeat until the player reaches the end room or the player reaches the maximum
+     //possible moves allowed
+     while (currentLocation->roomType != END_ROOM && playerMoves < MAXIMUM_MOVES) {          
+          
+          do{
+               printf("CURRENT LOCATION: %s\r\n", currentLocation->name);
+               
+               printf("POSSIBLE CONNECTIONS: ");
+               printConnections(roomsContainer, currentLocation);
+               printf("\r\n");
+
+               printf("WHERE TO? >");
+               
+               //get user input, store new location to current location
+               if ( (userSelection = getNextRoom(roomsContainer, currentLocation)) == NULL ) {
+                    validInput = 0;
+                    printf("\r\n");
+                    printf("HUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\r\n");
+               } else {
+                    validInput = 1;
+                    currentLocation = userSelection;
+               }
+               printf("\r\n");
+          } while (validInput == 0);
+          
+          history[playerMoves] = currentLocation->name;
+          
+          playerMoves++;
+     }
+     
+     if (currentLocation->roomType == END_ROOM) {
+          printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\r\n");
+          printf("YOU TOOK %d STEPS. YOUR PATH TO VICTORY WAS:\r\n", playerMoves);
+          //print names of rooms visited in order
+          for(i = 0; i < playerMoves; i++) {
+               printf("%s\r\n", history[i]);
+          }
+     } else {
+          printf("AFTER WANDERING THE MAZE FOR AGES, YOU DIE OF STARVATION.\r\n");
+     }
      
      return 0;
 }
@@ -167,8 +232,7 @@ const char * roomTypeToStr(enum RoomType t) {
 *  Output: A newly allocated pointer to a string with room name stored
 */
 char * getRoomName(int id) {
-     //String length maximum size - Do not exceed when defining.
-     const int STRING_LENGTH_MAX = 20;
+     //STRING_LENGTH_MAX is defined at top of program (see global constants)
      
      char * roomName;              // pointer to the name to return
      roomName = malloc(sizeof(char) * (STRING_LENGTH_MAX + 1));   // +1 for null char
@@ -429,18 +493,18 @@ void buildRandomConnections(struct RoomsContainer * roomsContainer) {
 *
 */
 void printFile( struct RoomsContainer * roomsContainer, int roomId, char * FILE_NAME) {
-     FILE * fin = fopen(FILE_NAME, "w");
+     FILE * fout = fopen(FILE_NAME, "w");
      
      struct RoomNode * room = roomsContainer->rooms[roomId];
      
      //Error check that file opened
-     if (fin == NULL) {
+     if (fout == NULL) {
           printf("Could not write to file %s\r\n", FILE_NAME);
           exit(1);
      }
      
      //Room name
-     fprintf(fin, "ROOM NAME: %s\n", room->name);
+     fprintf(fout, "ROOM NAME: %s\n", room->name);
      
      //iterate through room connections, and print the connection where it exists
      int i;
@@ -448,14 +512,14 @@ void printFile( struct RoomsContainer * roomsContainer, int roomId, char * FILE_
      for(i = 0; i < roomsContainer->numberOfRooms; i++) {
           if (room->connections[i] == 1) {      //if connection exists
                count++;
-               fprintf(fin, "CONNECTION %d: %s\n", count, roomsContainer->rooms[i]->name);
+               fprintf(fout, "CONNECTION %d: %s\n", count, roomsContainer->rooms[i]->name);
           }
      }
      
      //Room type
-     fprintf(fin, "ROOM TYPE: %s\n", roomTypeToStr(room->roomType) );
+     fprintf(fout, "ROOM TYPE: %s\n", roomTypeToStr(room->roomType) );
      
-     fclose(fin);
+     fclose(fout);
 }
 
 /*
@@ -486,3 +550,298 @@ void printToFile( struct RoomsContainer * roomsContainer, char * DIRECTORY_NAME)
           printFile(roomsContainer, i, FILE_NAME);
      } 
 }
+
+
+/*
+* countFilesInDirectory()
+* Counts the number of files in the directory given excluding '.' and '..'
+* Input: Directory Name
+* Output: The number of files listed in directory excluding '.' and '..'
+*/
+int countFilesInDirectory(char * DIRECTORY_NAME) {
+  
+  DIR *d;
+  struct dirent *dir;
+  int count = 0;
+  
+  d = opendir(DIRECTORY_NAME);
+  assert (d != NULL);
+  
+    while ((dir = readdir(d)) != NULL)
+    {
+      count++;
+    }
+
+    closedir(d);
+    
+    //subtract two for '.' and '..'
+    count = count - 2;
+    return count;
+}
+
+
+/*
+* loadFiles
+* ---------
+* Loads the files in DIRECTORY_NAME and parses information to RoomsContainer struct
+* Input: The directory_name to search
+* Output: The RoomsContainer is loaded with the parsed data from the room files
+*/
+void loadFiles(struct RoomsContainer * roomsContainer, char * DIRECTORY_NAME) {
+     // STRING_LENGTH_MAX is defined at top of program
+
+     //declarations
+     const int BUFFER_SIZE = 100;
+     DIR *d;
+     struct dirent *dir;
+     int count = 0;               //counts the number of files read (used for indexing)
+     char buffer[BUFFER_SIZE];        //an input buffer when reading files
+     char filePathName[100];  //file path and name to open is stored in here
+     char * roomName = 0;     //pointer to roomName substring
+     char * command = 0;      //pointer to command portion of buffer
+     char * name = 0;         //pointer to name portion of buffer
+     
+     // Load names first
+     // create an array for names
+     roomsContainer->roomNames = malloc(sizeof(char *) * roomsContainer->numberOfRooms);
+     
+     d = opendir(DIRECTORY_NAME);
+     assert (d != NULL);
+    
+     //skip '.' and '..'
+     readdir(d);
+     readdir(d);
+
+     //for each entry in directory, load the name of the room stored in the file
+     while ((dir = readdir(d)) != NULL)
+     {
+          buffer[0] = 0;                //'clear' the buffer
+          
+          //file and path name
+          filePathName[0] = 0;
+          strcpy(filePathName, DIRECTORY_NAME); 
+          strcat(filePathName, "/");
+          strcat(filePathName, dir->d_name);
+          
+          //open file
+          FILE * fin = fopen(filePathName, "r");
+          
+          //get the room name and store into the buffer
+          fReadLine(fin, buffer, BUFFER_SIZE);
+
+          fclose(fin);
+          
+          //find location of roomName
+          roomName = strstr(buffer, ": ") + 2;
+          
+          //allocate space for the room name to be stored
+          roomsContainer->roomNames[count] = malloc( sizeof(char) * STRING_LENGTH_MAX);
+          
+          //copy roomname to our array and to the node
+          strcpy(roomsContainer->roomNames[count], roomName);
+          roomsContainer->rooms[count]->name = roomsContainer->roomNames[count];
+          
+          count++;
+     }
+     closedir(d);
+
+     
+     d = opendir(DIRECTORY_NAME);
+     assert (d != NULL);
+    
+     //skip '.' and '..'
+     readdir(d);
+     readdir(d);
+     
+     count = 0;
+     //for each entry in directory, load the name, connections, and room type.
+     while ((dir = readdir(d)) != NULL)
+     {
+          //file and path name
+          filePathName[0] = 0;
+          strcpy(filePathName, DIRECTORY_NAME); 
+          strcat(filePathName, "/");
+          strcat(filePathName, dir->d_name);
+          
+          //open file
+          FILE * fin = fopen(filePathName, "r");
+          rewind(fin);
+          while ( fReadLine(fin, buffer, BUFFER_SIZE) ) {
+               
+               //split string based on command and name.
+               name = strstr(buffer, ": ") + 2;
+               *strstr(buffer, ": ") = 0;
+               command = buffer;
+               
+               if (strcmp(command, "ROOM NAME" ) == 0 ) {
+                    //Commands for setting room name
+                    assert(strcmp(name, roomsContainer->rooms[count]->name) == 0);
+                    
+                    //intentionally, no actions here, name is set in earlier loop
+                    
+               } else if ( strncmp(command, "CONNECTION X", 10) == 0 ) {
+                    //set room connections
+                    roomsContainer->rooms[count]->connections[getRoomIndex(roomsContainer, name)] = 1;
+                    roomsContainer->rooms[count]->numConnections++;
+                    
+               } else if ( strcmp (command, "ROOM TYPE") == 0) {
+                    if ( strcmp(name, "START_ROOM") == 0 ) {
+                         roomsContainer->rooms[count]->roomType = START_ROOM;
+                    } else if ( strcmp(name, "MID_ROOM") == 0 ) {
+                         roomsContainer->rooms[count]->roomType = MID_ROOM;
+                    } else if ( strcmp(name, "END_ROOM") == 0 ) {
+                         roomsContainer->rooms[count]->roomType = END_ROOM;
+                    } else {
+                         //could not parse file
+                         printf("Could not read ROOM TYPE: %s in file %s\r\n", name, filePathName);
+                         exit(1);
+                    }
+               } else {
+                    //error
+                    printf("Could not parse command %s in file %s\r\n", command, filePathName);
+                    exit(1);
+               }
+               
+               
+               
+          }
+     fclose(fin);    
+     //increment count
+     count++;
+     }
+     closedir(d);
+
+}
+
+
+/*
+* fReadLine()
+* -----------
+* Reads a line from a file and returns it when if reaches either a newline or eof
+* Input: File input stream, buffer to store in
+* Output: The line from the file excluding any newline characters is stored in buffer.
+*         Advances file iterator.
+*         Null character added to end of string.
+*/
+int fReadLine(FILE *fin, char * buffer, const int BUFFER_SIZE) {
+     char ch;
+     int i = 0;          //index
+     int endFlag = 0;
+     
+     while (endFlag == 0) {
+          //retrieve the next character
+          ch = fgetc(fin);
+          
+          if (ch == '\n' || ch == '\r' || ch == 0 || ch == -1) {
+               buffer[i] = 0;
+               endFlag = 1;
+               return i;
+          } else {
+               buffer[i] = ch;
+          }
+          
+          //error check, prevent buffer overflows
+          assert(i < BUFFER_SIZE);
+          
+          i++;
+     }
+     
+     return i;
+}
+
+
+/*
+* getRoomIndex()
+* -----------
+* Searches through names in RoomsContainer roomNames array and returns the index 
+* for the room name (or -1 if not found)
+* Input: The RoomsContainer to search through and the string with the name of the room
+* Output: Returns the index of the room where name is found
+*/
+int getRoomIndex(struct RoomsContainer * roomsContainer, char * str) {
+     int i;
+     for (i = 0; i < roomsContainer->numberOfRooms; i++) {
+          if ( strcmp( roomsContainer->roomNames[i], str ) == 0 ) {
+               return i;
+          }
+     }
+     
+     //index not found
+     return -1;
+}
+
+
+/*
+* getStartNode()
+* -----------
+* Finds the start node in RoomsContainer and returns a pointer to the RoomNode
+* Input: RoomsContainer completed
+* Output: A pointer to RoomNode containing START_NODE
+*/
+struct RoomNode * getStartNode(struct RoomsContainer * roomsContainer) {
+     int i;
+     struct RoomNode * ptr;
+     
+     for(i = 0; i < roomsContainer->numberOfRooms; i++) {
+          ptr = roomsContainer->rooms[i];
+          if (ptr->roomType == START_ROOM) {
+               return ptr;
+          }
+     }
+     
+     printf("ERROR: Could not find START_NODE\r\n");
+     exit(1); 
+}
+
+
+/*
+* printConnections()
+* ----------------
+* Prints the names of the connections for the given node in the format:
+* <connection1>, <connection2>, ..., <connectionN>.
+*/
+void printConnections(struct RoomsContainer * roomsContainer, struct RoomNode * room) {
+     int i;
+     int count = 0;
+     
+     for (i = 0; i < roomsContainer->numberOfRooms; i++) {
+          if (room->connections[i] == 1) {
+               count++;
+               
+               if (count < room->numConnections) {
+                    printf("%s, ", roomsContainer->roomNames[i]);
+               } else {
+                    //last connection to print
+                    printf("%s.", roomsContainer->roomNames[i]);
+               }
+                    
+          }
+     }
+}
+
+
+/*
+* setNextRoom
+* -----------
+* Gets user input. 
+* If valid room name, returns pointer to room.
+* if invalid, returns NULL.
+*/
+struct RoomNode * getNextRoom(struct RoomsContainer * roomsContainer, struct RoomNode * cur) {
+     char ch;
+     int idx;
+     const int BUFFER_SIZE = 100;
+     char buffer[BUFFER_SIZE];
+     
+     //get user input
+     fgets (buffer, BUFFER_SIZE, stdin);
+     *strchr(buffer, '\n') = 0;
+     
+     if ((idx = getRoomIndex(roomsContainer, buffer)) >= 0) {
+          if (cur->connections[idx] == 1)
+               return roomsContainer->rooms[idx];
+     }
+     
+     return NULL;
+
+}     
