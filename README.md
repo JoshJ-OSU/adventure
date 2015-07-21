@@ -1,4 +1,4 @@
-Program 2 – CS 344 – Summer 2015
+# Program 2 – CS 344 – Summer 2015
 
 This assignment asks you to write a simple game akin to old text adventure games like Adventure:
 
