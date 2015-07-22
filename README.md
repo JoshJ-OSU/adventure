@@ -1,5 +1,7 @@
 # Program 2 – CS 344 – Summer 2015
 
+ 
+
 This assignment asks you to write a simple game akin to old text adventure games like Adventure:
 
 [http://en.wikipedia.org/wiki/Colossal_Cave_Adventure (Links to an external site.)](http://en.wikipedia.org/wiki/Colossal_Cave_Adventure)
@@ -39,27 +41,43 @@ The possible room type entries are: START_ROOM, END_ROOM, and MID_ROOM. The assi
 Here are the contents of files representing three sample rooms from a full set of room files. My list of room names includes the following, among others: XYZZY, PLUGH, PLOVER, twisty, Zork, Crowther, and Dungeon.
 
 ROOM NAME: XYZZY
+
 CONNECTION 1: PLOVER
+
 CONNECTION 2: Dungeon
+
 CONNECTION 3: twisty
+
 ROOM TYPE: START_ROOM
 
 ROOM NAME: twisty
+
 CONNECTION 1: PLOVER
+
 CONNECTION 2: XYZZY
+
 CONNECTION 3: Dungeon
+
 CONNECTION 4: PLUGH
+
 ROOM TYPE: MID_ROOM
 
 ... (Other rooms) ...
 
 ROOM NAME: Dungeon
+
 CONNECTION 1: twisty
+
 CONNECTION 2: PLOVER
+
 CONNECTION 3: XYZZY
+
 CONNECTION 4: PLUGH
+
 CONNECTION 5: Crowther
+
 CONNECTION 6: Zork
+
 ROOM TYPE: END_ROOM
 
 The ordering of the connections from a room to the other rooms, in the file, does not matter.
@@ -79,45 +97,63 @@ The cursor should be placed just after the > sign. Note the punctuation used: co
 When the user types in the exact name of a connection to another room (Dungeon, for example), and then hits return, your program should write a new line, and then continue running as before. For example, if I typed twisty above, here is what the output should look like:
 
 CURRENT LOCATION: XYZZY
+
 POSSIBLE CONNECTIONS: PLOVER, Dungeon, twisty.
+
 WHERE TO? >twisty
 
 CURRENT LOCATION: twisty
+
 POSSIBLE CONNECTIONS: PLOVER, XYZZY, Dungeon, PLUGH.
+
 WHERE TO? >
 
 If the user types anything but a valid room name from this location (case matters!), the program should return an error line that says "HUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.", and repeat the current location and prompt, as follows:
 
 CURRENT LOCATION: XYZZY
+
 POSSIBLE CONNECTIONS: PLOVER, Dungeon, twisty.
+
 WHERE TO? >Twisty
 
 HUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.
 
 CURRENT LOCATION: XYZZY
+
 POSSIBLE CONNECTIONS: PLOVER, Dungeon, twisty.
+
 WHERE TO? >
 
 Trying to go to an incorrect location does not increment the path history or the step count. Once the user has reached the End Room, the program should indicate that it has been reached. It should also print out the path the user has taken to get there, the number of steps, and a congratulatory message. Here is a complete game example, showing the winning messages and formatting, and the return to the prompt:
 
 CURRENT LOCATION: XYZZY
+
 POSSIBLE CONNECTIONS: PLOVER, Dungeon, twisty.
+
 WHERE TO? >Twisty
 
 HUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.
 
 CURRENT LOCATION: XYZZY
+
 POSSIBLE CONNECTIONS: PLOVER, Dungeon, twisty.
+
 WHERE TO? >twisty
 
 CURRENT LOCATION: twisty
+
 POSSIBLE CONNECTIONS: PLOVER, XYZZY, Dungeon, PLUGH.
+
 WHERE TO? >Dungeon
 
 YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!
+
 YOU TOOK 2 STEPS. YOUR PATH TO VICTORY WAS:
+
 twisty
+
 Dungeon
+
 %
 
 Note the punctuation used: I expect the same punctuation in your program.
